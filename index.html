@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Geometry Dash Clone</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #111; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+        canvas { display: block; }
+        
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 20px;
+            border: 3px solid #00f2ff;
+            text-align: center;
+            color: white;
+            display: none;
+            min-width: 280px;
+        }
+
+        #game-over h1 { color: #ff4444; margin-top: 0; }
+        #game-over p { font-size: 18px; margin: 10px 0; }
+        #developer-tag { color: #00f2ff; font-weight: bold; font-size: 20px; }
+        
+        button {
+            background: #00f2ff;
+            border: none;
+            padding: 12px 25px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">Score: <span id="score-val">0</span></div>
+
+    <div id="game-over">
+        <h1>CRASHED!</h1>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <p>Developed by: <br><span id="developer-tag">Rishabh Gupta</span></p>
+        <button onclick="resetGame()">RETRY</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score-val');
+    const finalScoreElement = document.getElementById('final-score');
+    const gameOverScreen = document.getElementById('game-over');
+
+    // Game Settings
+    let gameActive = true;
+    let score = 0;
+    let gameSpeed = 6;
+    const gravity = 0.7;
+    const groundHeight = 80;
+
+    const player = {
+        x: 100,
+        y: 0,
+        size: 45,
+        dy: 0,
+        jumpForce: -14,
+        grounded: false,
+        rotation: 0
+    };
+
+    let obstacles = [];
+    let spawnTimer = 0;
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        player.y = canvas.height - groundHeight - player.size;
+    }
+
+    // Input Logic
+    function handleJump() {
+        if (player.grounded && gameActive) {
+            player.dy = player.jumpForce;
+            player.grounded = false;
+        } else if (!gameActive && gameOverScreen.style.display === 'block') {
+            // Optional: allow jump button to restart
+        }
+    }
+
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') handleJump(); });
+    window.addEventListener('mousedown', handleJump);
+    window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); }, {passive: false});
+
+    function createObstacle() {
+        obstacles.push({
+            x: canvas.width + 100,
+            width: 40,
+            height: 50
+        });
+    }
+
+    function resetGame() {
+        score = 0;
+        gameSpeed = 6;
+        obstacles = [];
+        gameActive = true;
+        player.dy = 0;
+        player.rotation = 0;
+        scoreElement.innerText = "0";
+        gameOverScreen.style.display = 'none';
+        requestAnimationFrame(update);
+    }
+
+    function update() {
+        if (!gameActive) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw Background Gradient
+        let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#000428');
+        gradient.addColorStop(1, '#004e92');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 2. Draw Ground
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+        ctx.strokeStyle = '#00f2ff';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(0, canvas.height - groundHeight, canvas.width, 2);
+
+        // 3. Player Physics
+        player.dy += gravity;
+        player.y += player.dy;
+
+        if (player.y + player.size > canvas.height - groundHeight) {
+            player.y = canvas.height - groundHeight - player.size;
+            player.dy = 0;
+            player.grounded = true;
+            player.rotation = Math.round(player.rotation / 90) * 90;
+        } else {
+            player.rotation += 4; // Rotate while jumping
+            player.grounded = false;
+        }
+
+        // 4. Draw Player
+        ctx.save();
+        ctx.translate(player.x + player.size/2, player.y + player.size/2);
+        ctx.rotate(player.rotation * Math.PI / 180);
+        ctx.fillStyle = '#00f2ff';
+        ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(-player.size/2, -player.size/2, player.size, player.size);
+        ctx.restore();
+
+        // 5. Obstacle Management
+        spawnTimer++;
+        if (spawnTimer > (100 - gameSpeed)) {
+            if (Math.random() > 0.98) {
+                createObstacle();
+                spawnTimer = 0;
+            }
+        }
+
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let o = obstacles[i];
+            o.x -= gameSpeed;
+
+            // Draw Spike
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            ctx.moveTo(o.x, canvas.height - groundHeight);
+            ctx.lineTo(o.x + o.width, canvas.height - groundHeight);
+            ctx.lineTo(o.x + o.width/2, canvas.height - groundHeight - o.height);
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+
+            // Simple Circle-ish Collision for the Triangle
+            let centerX = o.x + o.width/2;
+            let centerY = canvas.height - groundHeight - o.height/2;
+            
+            if (
+                player.x + player.size > o.x + 10 && 
+                player.x < o.x + o.width - 10 &&
+                player.y + player.size > canvas.height - groundHeight - o.height + 10
+            ) {
+                gameActive = false;
+                finalScoreElement.innerText = score;
+                gameOverScreen.style.display = 'block';
+            }
+
+            // Score & Cleanup
+            if (o.x + o.width < 0) {
+                obstacles.splice(i, 1);
+                score++;
+                scoreElement.innerText = score;
+                gameSpeed += 0.1; // Speed up
+            }
+        }
+
+        requestAnimationFrame(update);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    update();
+</script>
+</body>
+</html>
